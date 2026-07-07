@@ -54,6 +54,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<span class="seob-ic dashicons dashicons-backup"></span>
 				<?php esc_html_e( 'Content Freshness', 'seo-boost' ); ?>
 			</a>
+			<a href="#/ai-content" class="seob-nav__item" data-route="/ai-content">
+				<span class="seob-ic dashicons dashicons-lightbulb"></span>
+				<?php esc_html_e( 'AI Content Kit', 'seo-boost' ); ?>
+			</a>
 			<a href="#/links" class="seob-nav__item" data-route="/links">
 				<span class="seob-ic dashicons dashicons-admin-links"></span>
 				<?php esc_html_e( 'Broken Links', 'seo-boost' ); ?>

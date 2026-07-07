@@ -1034,6 +1034,340 @@
 		}
 	}
 
+	/* ===== AI Content Kit ===== */
+	var aiState = { filter: 'all', page: 1, search: '', template: 'rewrite', format: 'markdown', selected: {} };
+	var AI_TEMPLATES = [
+		[ 'rewrite', 'Rewrite & optimise existing content' ],
+		[ 'fresh', 'Write brand-new content on this topic' ],
+		[ 'expand', 'Expand thin content into an in-depth guide' ],
+		[ 'meta', 'Generate SEO title, meta description & FAQs' ],
+	];
+
+	Views[ '/ai-content' ] = function () {
+		loading();
+		setHeader( 'AI Content Kit', 'Export page data as ready-to-paste prompts for Claude or ChatGPT.' );
+		aiState.page = 1;
+		aiState.selected = {};
+		api( '/settings' ).then( function ( st ) {
+			renderAiShell( st );
+			loadAiPosts();
+		} ).catch( function () {
+			view.innerHTML = errorState();
+		} );
+	};
+
+	function renderAiShell( st ) {
+		view.innerHTML = '';
+
+		/* Business context card */
+		var ctx = h( '<div class="seob-card"></div>' );
+		ctx.innerHTML =
+			'<div class="seob-card__head"><div><h2>Business context</h2><p>Injected into every prompt so the AI writes for your agency &amp; location.</p></div></div>' +
+			'<div class="seob-field" style="margin:0">' +
+			'<textarea class="seob-input" name="ai_business_context" placeholder="e.g. We are a digital marketing agency in Goa serving local hotels, restaurants and startups. Friendly, expert tone.">' +
+			esc( st.ai_business_context || '' ) + '</textarea>' +
+			'<div class="seob-mt"><button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-savectx"><span class="dashicons dashicons-saved"></span> Save context</button> ' +
+			'<span class="seob-muted" style="font-size:12px">Pulls in your name, location &amp; area served from Local SEO automatically.</span></div>' +
+			'</div>';
+		view.appendChild( ctx );
+
+		/* Controls card */
+		var controls = h( '<div class="seob-card seob-mt"></div>' );
+		var tplOpts = AI_TEMPLATES.map( function ( t ) {
+			return '<option value="' + t[ 0 ] + '"' + ( t[ 0 ] === aiState.template ? ' selected' : '' ) + '>' + esc( t[ 1 ] ) + '</option>';
+		} ).join( '' );
+		controls.innerHTML =
+			'<div class="seob-card__head"><div><h2>Export options</h2><p>Pick the goal and format, then export single pages or a bulk pack.</p></div></div>' +
+			'<div class="seob-row">' +
+			'<div class="seob-flex1"><label class="seob-label">AI task</label>' +
+			'<select class="seob-select" id="seob-ai-template" style="max-width:100%">' + tplOpts + '</select></div>' +
+			'<div class="seob-flex1"><label class="seob-label">Format</label>' +
+			'<select class="seob-select" id="seob-ai-format" style="max-width:100%">' +
+			'<option value="markdown"' + ( aiState.format === 'markdown' ? ' selected' : '' ) + '>Markdown (for Claude/ChatGPT)</option>' +
+			'<option value="json"' + ( aiState.format === 'json' ? ' selected' : '' ) + '>JSON (structured)</option>' +
+			'</select></div>' +
+			'</div>';
+		view.appendChild( controls );
+
+		/* List card */
+		var card = h( '<div class="seob-card seob-mt"></div>' );
+		card.innerHTML =
+			'<div class="seob-toolbar">' +
+			'<div class="seob-tabs" id="seob-ai-filters">' +
+			aiTab( 'all', 'All' ) +
+			aiTab( 'stale', 'Stale' ) +
+			aiTab( 'aging', 'Aging' ) +
+			aiTab( 'fresh', 'Fresh' ) +
+			'</div>' +
+			'<div class="seob-search"><span class="dashicons dashicons-search"></span>' +
+			'<input type="search" id="seob-ai-search" placeholder="Search pages…"></div>' +
+			'</div>' +
+			'<div class="seob-bulkbar" id="seob-ai-bulkbar" hidden>' +
+			'<span id="seob-ai-count">0 selected</span>' +
+			'<span style="margin-left:auto;display:inline-flex;gap:8px">' +
+			'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-clear">Clear</button>' +
+			'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-copysel"><span class="dashicons dashicons-clipboard"></span> Copy pack</button>' +
+			'<button class="seob-btn seob-btn--primary seob-btn--sm" id="seob-ai-exportsel"><span class="dashicons dashicons-download"></span> Download pack</button>' +
+			'</span></div>' +
+			'<div id="seob-ai-body"></div>';
+		view.appendChild( card );
+
+		/* Preview area */
+		var preview = h( '<div class="seob-card seob-mt" id="seob-ai-preview" hidden></div>' );
+		view.appendChild( preview );
+
+		/* Wire controls */
+		document.getElementById( 'seob-ai-savectx' ).addEventListener( 'click', function ( e ) {
+			setBusy( e.target, true );
+			api( '/settings', 'POST', { ai_business_context: document.querySelector( '[name="ai_business_context"]' ).value } )
+				.then( function () {
+					setBusy( e.target, false );
+					toast( 'Context saved.', 'success' );
+				} )
+				.catch( function () {
+					setBusy( e.target, false );
+					toast( cfg.i18n.error, 'error' );
+				} );
+		} );
+
+		document.getElementById( 'seob-ai-template' ).addEventListener( 'change', function ( e ) {
+			aiState.template = e.target.value;
+		} );
+		document.getElementById( 'seob-ai-format' ).addEventListener( 'change', function ( e ) {
+			aiState.format = e.target.value;
+		} );
+
+		card.querySelectorAll( '#seob-ai-filters button' ).forEach( function ( b ) {
+			b.addEventListener( 'click', function () {
+				aiState.filter = b.dataset.filter;
+				aiState.page = 1;
+				card.querySelectorAll( '#seob-ai-filters button' ).forEach( function ( x ) {
+					x.classList.toggle( 'is-active', x === b );
+				} );
+				loadAiPosts();
+			} );
+		} );
+
+		var searchInput = document.getElementById( 'seob-ai-search' );
+		var timer;
+		searchInput.addEventListener( 'input', function () {
+			clearTimeout( timer );
+			timer = setTimeout( function () {
+				aiState.search = searchInput.value;
+				aiState.page = 1;
+				loadAiPosts();
+			}, 350 );
+		} );
+
+		document.getElementById( 'seob-ai-clear' ).addEventListener( 'click', function () {
+			aiState.selected = {};
+			loadAiPosts();
+			updateAiBulkBar();
+		} );
+		document.getElementById( 'seob-ai-exportsel' ).addEventListener( 'click', function ( e ) {
+			aiExportSelected( e.target, false );
+		} );
+		document.getElementById( 'seob-ai-copysel' ).addEventListener( 'click', function ( e ) {
+			aiExportSelected( e.target, true );
+		} );
+	}
+
+	function aiTab( filter, label ) {
+		var active = aiState.filter === filter ? ' is-active' : '';
+		return '<button class="' + active.trim() + '" data-filter="' + filter + '">' + label + '</button>';
+	}
+
+	function selectedIds() {
+		return Object.keys( aiState.selected ).filter( function ( k ) {
+			return aiState.selected[ k ];
+		} );
+	}
+
+	function updateAiBulkBar() {
+		var bar = document.getElementById( 'seob-ai-bulkbar' );
+		if ( ! bar ) {
+			return;
+		}
+		var ids = selectedIds();
+		bar.hidden = ids.length === 0;
+		var c = document.getElementById( 'seob-ai-count' );
+		if ( c ) {
+			c.textContent = ids.length + ' selected' + ( ids.length >= 30 ? ' (max 30 per pack)' : '' );
+		}
+	}
+
+	function loadAiPosts() {
+		var body = document.getElementById( 'seob-ai-body' );
+		body.innerHTML = '<div class="seob-loading"><span class="seob-spinner"></span> Loading pages…</div>';
+		var q =
+			'/ai/posts?filter=' + encodeURIComponent( aiState.filter ) +
+			'&page=' + aiState.page +
+			'&per_page=20&search=' + encodeURIComponent( aiState.search );
+		api( q ).then( function ( d ) {
+			renderAiTable( d );
+			updateAiBulkBar();
+		} ).catch( function () {
+			body.innerHTML = errorState();
+		} );
+	}
+
+	function renderAiTable( d ) {
+		var body = document.getElementById( 'seob-ai-body' );
+		if ( ! d.items || ! d.items.length ) {
+			body.innerHTML = '<div class="seob-empty"><span class="dashicons dashicons-search"></span><h3>No pages found</h3><p>Try a different filter or search.</p></div>';
+			return;
+		}
+
+		var rows = d.items.map( function ( it ) {
+			var checked = aiState.selected[ it.id ] ? ' checked' : '';
+			return (
+				'<tr>' +
+				'<td style="width:34px"><input type="checkbox" class="seob-ai-check" data-id="' + it.id + '"' + checked + '></td>' +
+				'<td><div class="seob-url" style="font-family:inherit;font-weight:600">' + esc( it.title || '(no title)' ) + '</div>' +
+				'<div class="seob-anchor">' + esc( it.url ) + '</div></td>' +
+				'<td><span class="seob-muted">' + esc( it.post_type ) + '</span></td>' +
+				'<td>' + freshBadge( it.status, it.score ) + '</td>' +
+				'<td><small class="seob-muted">' + num( it.words ) + ' words</small></td>' +
+				'<td style="text-align:right;white-space:nowrap">' +
+				'<button class="seob-btn seob-btn--ghost seob-btn--sm seob-ai-preview" data-id="' + it.id + '"><span class="dashicons dashicons-visibility"></span> Preview</button> ' +
+				'<button class="seob-btn seob-btn--primary seob-btn--sm seob-ai-copy" data-id="' + it.id + '"><span class="dashicons dashicons-clipboard"></span> Copy</button>' +
+				'</td></tr>'
+			);
+		} ).join( '' );
+
+		var totalPages = Math.max( 1, Math.ceil( d.total / 20 ) );
+		body.innerHTML =
+			'<table class="seob-table"><thead><tr>' +
+			'<th><input type="checkbox" id="seob-ai-all"></th><th>Page</th><th>Type</th><th>Freshness</th><th>Length</th><th></th>' +
+			'</tr></thead><tbody>' + rows + '</tbody></table>' +
+			'<div class="seob-pager"><div class="seob-pager__info">' + num( d.total ) + ' page(s) · page ' + aiState.page + ' of ' + totalPages + '</div>' +
+			'<div class="seob-pager__btns">' +
+			'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-prev"' + ( aiState.page <= 1 ? ' disabled' : '' ) + '>Prev</button>' +
+			'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-next"' + ( aiState.page >= totalPages ? ' disabled' : '' ) + '>Next</button>' +
+			'</div></div>';
+
+		body.querySelectorAll( '.seob-ai-check' ).forEach( function ( cb ) {
+			cb.addEventListener( 'change', function () {
+				aiState.selected[ cb.dataset.id ] = cb.checked;
+				updateAiBulkBar();
+			} );
+		} );
+		var allCb = document.getElementById( 'seob-ai-all' );
+		if ( allCb ) {
+			allCb.addEventListener( 'change', function () {
+				body.querySelectorAll( '.seob-ai-check' ).forEach( function ( cb ) {
+					cb.checked = allCb.checked;
+					aiState.selected[ cb.dataset.id ] = allCb.checked;
+				} );
+				updateAiBulkBar();
+			} );
+		}
+
+		body.querySelectorAll( '.seob-ai-preview' ).forEach( function ( b ) {
+			b.addEventListener( 'click', function () {
+				aiPreview( b.dataset.id );
+			} );
+		} );
+		body.querySelectorAll( '.seob-ai-copy' ).forEach( function ( b ) {
+			b.addEventListener( 'click', function () {
+				aiCopySingle( b );
+			} );
+		} );
+
+		var prev = document.getElementById( 'seob-ai-prev' );
+		var next = document.getElementById( 'seob-ai-next' );
+		if ( prev ) {
+			prev.addEventListener( 'click', function () {
+				if ( aiState.page > 1 ) {
+					aiState.page--;
+					loadAiPosts();
+				}
+			} );
+		}
+		if ( next ) {
+			next.addEventListener( 'click', function () {
+				if ( aiState.page < totalPages ) {
+					aiState.page++;
+					loadAiPosts();
+				}
+			} );
+		}
+	}
+
+	function aiBriefUrl( postId ) {
+		return '/ai/brief?post_id=' + encodeURIComponent( postId ) +
+			'&template=' + encodeURIComponent( aiState.template ) +
+			'&format=' + encodeURIComponent( aiState.format );
+	}
+
+	function aiCopySingle( btn ) {
+		setBusy( btn, true );
+		api( aiBriefUrl( btn.dataset.id ) ).then( function ( r ) {
+			copyText( r.content );
+			setBusy( btn, false );
+			toast( 'Brief copied — paste into Claude or ChatGPT.', 'success' );
+		} ).catch( function () {
+			setBusy( btn, false );
+			toast( cfg.i18n.error, 'error' );
+		} );
+	}
+
+	function aiPreview( postId ) {
+		var box = document.getElementById( 'seob-ai-preview' );
+		box.hidden = false;
+		box.innerHTML = '<div class="seob-loading"><span class="seob-spinner"></span> Building brief…</div>';
+		box.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
+		api( aiBriefUrl( postId ) ).then( function ( r ) {
+			box.innerHTML =
+				'<div class="seob-card__head"><div><h2>Preview: ' + esc( r.brief ? r.brief.title : '' ) + '</h2>' +
+				'<p>' + esc( r.filename ) + '</p></div>' +
+				'<span style="display:inline-flex;gap:8px">' +
+				'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-pv-close">Close</button>' +
+				'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-ai-pv-dl"><span class="dashicons dashicons-download"></span> Download</button>' +
+				'<button class="seob-btn seob-btn--primary seob-btn--sm" id="seob-ai-pv-copy"><span class="dashicons dashicons-clipboard"></span> Copy</button>' +
+				'</span></div>' +
+				'<pre class="seob-pre">' + esc( r.content ) + '</pre>';
+			document.getElementById( 'seob-ai-pv-close' ).addEventListener( 'click', function () {
+				box.hidden = true;
+			} );
+			document.getElementById( 'seob-ai-pv-copy' ).addEventListener( 'click', function () {
+				copyText( r.content );
+				toast( 'Copied.', 'success' );
+			} );
+			document.getElementById( 'seob-ai-pv-dl' ).addEventListener( 'click', function () {
+				downloadFile( r.filename, r.mime, r.content );
+			} );
+		} ).catch( function () {
+			box.innerHTML = errorState();
+		} );
+	}
+
+	function aiExportSelected( btn, copyOnly ) {
+		var ids = selectedIds();
+		if ( ! ids.length ) {
+			toast( 'Select at least one page first.', 'error' );
+			return;
+		}
+		setBusy( btn, true );
+		api( '/ai/bulk', 'POST', { post_ids: ids, template: aiState.template, format: aiState.format } ).then( function ( r ) {
+			setBusy( btn, false );
+			if ( ! r.success ) {
+				toast( r.message || cfg.i18n.error, 'error' );
+				return;
+			}
+			if ( copyOnly ) {
+				copyText( r.content );
+				toast( 'Content pack (' + num( r.count ) + ' pages) copied.', 'success' );
+			} else {
+				downloadFile( r.filename, r.mime, r.content );
+				toast( 'Downloaded pack of ' + num( r.count ) + ' pages.', 'success' );
+			}
+		} ).catch( function () {
+			setBusy( btn, false );
+			toast( cfg.i18n.error, 'error' );
+		} );
+	}
+
 	/* ===== Settings ===== */
 	Views[ '/settings' ] = function () {
 		loading();
@@ -1229,6 +1563,20 @@
 	function errorState() {
 		return '<div class="seob-empty"><span class="dashicons dashicons-warning" style="color:var(--seob-red)"></span>' +
 			'<h3>Could not load data</h3><p>Please refresh the page or check your permissions.</p></div>';
+	}
+
+	function downloadFile( filename, mime, content ) {
+		var blob = new Blob( [ content ], { type: ( mime || 'text/plain' ) + ';charset=utf-8' } );
+		var url = URL.createObjectURL( blob );
+		var a = document.createElement( 'a' );
+		a.href = url;
+		a.download = filename || 'export.txt';
+		document.body.appendChild( a );
+		a.click();
+		document.body.removeChild( a );
+		setTimeout( function () {
+			URL.revokeObjectURL( url );
+		}, 1000 );
 	}
 
 	function copyText( text ) {

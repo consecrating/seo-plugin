@@ -71,6 +71,13 @@ final class SEO_Boost {
 	public $freshness;
 
 	/**
+	 * AI Content Kit / export module.
+	 *
+	 * @var SEO_Boost_AI_Export
+	 */
+	public $ai_export;
+
+	/**
 	 * REST API module.
 	 *
 	 * @var SEO_Boost_REST
@@ -109,6 +116,7 @@ final class SEO_Boost {
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-search-console.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-schema.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-freshness.php';
+		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-ai-export.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-rest.php';
 
 		if ( is_admin() ) {
@@ -126,6 +134,7 @@ final class SEO_Boost {
 		$this->search_console = new SEO_Boost_Search_Console();
 		$this->schema         = new SEO_Boost_Schema();
 		$this->freshness      = new SEO_Boost_Freshness();
+		$this->ai_export      = new SEO_Boost_AI_Export( $this );
 		$this->rest           = new SEO_Boost_REST( $this );
 
 		if ( is_admin() ) {

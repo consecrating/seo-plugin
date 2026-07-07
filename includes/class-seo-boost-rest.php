@@ -113,6 +113,26 @@ class SEO_Boost_REST {
 				)
 			)
 		);
+
+		// AI Content Kit.
+		register_rest_route(
+			self::NAMESPACE,
+			'/ai/posts',
+			array_merge(
+				$args_get,
+				array(
+					'callback' => array( $this, 'ai_posts' ),
+					'args'     => array(
+						'filter'   => array( 'default' => 'all' ),
+						'page'     => array( 'default' => 1 ),
+						'per_page' => array( 'default' => 20 ),
+						'search'   => array( 'default' => '' ),
+					),
+				)
+			)
+		);
+		register_rest_route( self::NAMESPACE, '/ai/brief', array_merge( $args_get, array( 'callback' => array( $this, 'ai_brief' ) ) ) );
+		register_rest_route( self::NAMESPACE, '/ai/bulk', array_merge( $args_post, array( 'callback' => array( $this, 'ai_bulk' ) ) ) );
 	}
 
 	/**
@@ -174,6 +194,69 @@ class SEO_Boost_REST {
 		);
 		$data['summary'] = $this->plugin->freshness->get_summary();
 		return rest_ensure_response( $data );
+	}
+
+	/**
+	 * GET /ai/posts - list posts available for AI export.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function ai_posts( WP_REST_Request $request ) {
+		$data              = $this->plugin->ai_export->get_posts(
+			array(
+				'filter'   => sanitize_key( $request->get_param( 'filter' ) ),
+				'page'     => max( 1, (int) $request->get_param( 'page' ) ),
+				'per_page' => max( 1, min( 100, (int) $request->get_param( 'per_page' ) ) ),
+				'search'   => sanitize_text_field( (string) $request->get_param( 'search' ) ),
+			)
+		);
+		$data['templates'] = $this->plugin->ai_export->templates();
+		return rest_ensure_response( $data );
+	}
+
+	/**
+	 * GET /ai/brief - single-post export (markdown or json).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function ai_brief( WP_REST_Request $request ) {
+		$post_id  = (int) $request->get_param( 'post_id' );
+		$template = sanitize_key( (string) $request->get_param( 'template' ) );
+		$format   = 'json' === $request->get_param( 'format' ) ? 'json' : 'markdown';
+
+		$export = $this->plugin->ai_export->export_single( $post_id, $template, $format );
+		if ( ! $export ) {
+			return new WP_Error( 'not_found', __( 'Post not found.', 'seo-boost' ), array( 'status' => 404 ) );
+		}
+		return rest_ensure_response( $export );
+	}
+
+	/**
+	 * POST /ai/bulk - export a content pack from many posts.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function ai_bulk( WP_REST_Request $request ) {
+		$ids      = $request->get_param( 'post_ids' );
+		$ids      = is_array( $ids ) ? $ids : array();
+		$template = sanitize_key( (string) $request->get_param( 'template' ) );
+		$format   = 'json' === $request->get_param( 'format' ) ? 'json' : 'markdown';
+
+		if ( empty( $ids ) ) {
+			return rest_ensure_response(
+				array(
+					'success' => false,
+					'message' => __( 'Select at least one page to export.', 'seo-boost' ),
+				)
+			);
+		}
+
+		$export            = $this->plugin->ai_export->export_bulk( $ids, $template, $format );
+		$export['success'] = true;
+		return rest_ensure_response( $export );
 	}
 
 	/**
@@ -298,6 +381,11 @@ class SEO_Boost_REST {
 		// pasted <meta> tag).
 		if ( isset( $in['gsc_verification'] ) ) {
 			$clean['gsc_verification'] = SEO_Boost_Search_Console::extract_code( $in['gsc_verification'] );
+		}
+
+		// AI business context (multi-line free text).
+		if ( isset( $in['ai_business_context'] ) ) {
+			$clean['ai_business_context'] = sanitize_textarea_field( (string) $in['ai_business_context'] );
 		}
 
 		$saved = SEO_Boost_Settings::update( $clean );

@@ -74,6 +74,9 @@ class SEO_Boost_Settings {
 			'freshness_post_types'   => array( 'post' ),
 			'freshness_aging_months' => 3,
 			'freshness_stale_months' => 6,
+
+			// AI Content Kit.
+			'ai_business_context'    => '', // Optional agency/audience context injected into AI prompts.
 		);
 	}
 

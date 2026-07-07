@@ -375,3 +375,17 @@ textarea.seob-input { min-height: 120px; font-family: ui-monospace, monospace; f
 .seob-log__list li:last-child { border-bottom: none; }
 .seob-log__list a.seob-url { color: var(--seob-brand); text-decoration: none; }
 .seob-log__list a.seob-url:hover { text-decoration: underline; }
+
+
+/* ---------- AI Content Kit ---------- */
+.seob-bulkbar {
+	display: flex; align-items: center; gap: 10px;
+	background: var(--seob-brand-soft); border: 1px solid #d9dcff; border-radius: 12px;
+	padding: 10px 14px; margin-bottom: 14px; font-weight: 600; font-size: 13px; color: var(--seob-brand);
+}
+.seob-pre {
+	background: #0f1120; color: #d7dae8; border-radius: 12px; padding: 18px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.6;
+	white-space: pre-wrap; word-break: break-word; max-height: 480px; overflow: auto; margin: 0;
+}
+.seob-ai-check, #seob-ai-all { width: 16px; height: 16px; cursor: pointer; }
