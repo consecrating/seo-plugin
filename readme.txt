@@ -4,7 +4,7 @@ Tags: seo, sitemap, xml sitemap, indexnow, broken link checker, google
 Requires at least: 5.6
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,11 @@ Google does not currently consume IndexNow directly, but Bing, Yandex, Seznam an
 The sitemap module disables the WordPress core sitemap to avoid duplicates. If another SEO plugin also outputs a sitemap, disable one of them to avoid conflicts.
 
 == Changelog ==
+
+= 1.1.0 =
+* IndexNow submission log now expands to show the exact URLs submitted in each request.
+* Added an IndexNow "Verify key" tool that checks the key file is publicly reachable, with clearer guidance on the HTTP 202 "validation pending" status.
+* Added a Google Search Console section: one-click HTML-tag site verification (meta tag) plus direct links to add your property and submit the sitemap.
 
 = 1.0.0 =
 * Initial release: XML sitemap, IndexNow, broken link checker, and modern dashboard.

@@ -50,6 +50,13 @@ final class SEO_Boost {
 	public $admin;
 
 	/**
+	 * Search Console module.
+	 *
+	 * @var SEO_Boost_Search_Console
+	 */
+	public $search_console;
+
+	/**
 	 * REST API module.
 	 *
 	 * @var SEO_Boost_REST
@@ -85,6 +92,7 @@ final class SEO_Boost {
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-sitemap.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-indexnow.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-broken-links.php';
+		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-search-console.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-rest.php';
 
 		if ( is_admin() ) {
@@ -96,10 +104,11 @@ final class SEO_Boost {
 	 * Instantiate the modules.
 	 */
 	private function init_modules() {
-		$this->sitemap      = new SEO_Boost_Sitemap();
-		$this->indexnow     = new SEO_Boost_IndexNow();
-		$this->broken_links = new SEO_Boost_Broken_Links();
-		$this->rest         = new SEO_Boost_REST( $this );
+		$this->sitemap        = new SEO_Boost_Sitemap();
+		$this->indexnow       = new SEO_Boost_IndexNow();
+		$this->broken_links   = new SEO_Boost_Broken_Links();
+		$this->search_console = new SEO_Boost_Search_Console();
+		$this->rest           = new SEO_Boost_REST( $this );
 
 		if ( is_admin() ) {
 			$this->admin = new SEO_Boost_Admin( $this );

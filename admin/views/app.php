@@ -42,6 +42,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<span class="seob-ic dashicons dashicons-superhero-alt"></span>
 				<?php esc_html_e( 'IndexNow', 'seo-boost' ); ?>
 			</a>
+			<a href="#/search-console" class="seob-nav__item" data-route="/search-console">
+				<span class="seob-ic dashicons dashicons-google"></span>
+				<?php esc_html_e( 'Search Console', 'seo-boost' ); ?>
+			</a>
 			<a href="#/links" class="seob-nav__item" data-route="/links">
 				<span class="seob-ic dashicons dashicons-admin-links"></span>
 				<?php esc_html_e( 'Broken Links', 'seo-boost' ); ?>

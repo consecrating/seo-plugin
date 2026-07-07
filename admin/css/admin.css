@@ -338,3 +338,40 @@ textarea.seob-input { min-height: 120px; font-family: ui-monospace, monospace; f
 .seob-muted { color: var(--seob-muted); }
 .seob-divider { height: 1px; background: var(--seob-line); margin: 18px 0; border: 0; }
 .seob-inline { display: inline-flex; align-items: center; gap: 8px; }
+
+
+/* ---------- Info notes ---------- */
+.seob-note {
+	display: flex; gap: 12px; align-items: flex-start;
+	background: var(--seob-blue-soft); border: 1px solid #d3e6fd; border-radius: 12px;
+	padding: 14px 16px; color: var(--seob-ink);
+}
+.seob-note .dashicons { color: var(--seob-blue); flex: 0 0 auto; margin-top: 1px; }
+.seob-note strong { font-size: 13.5px; }
+.seob-note--ok { background: var(--seob-green-soft); border-color: #cdeede; }
+.seob-note--ok .dashicons { color: var(--seob-green); }
+.seob-note--warn { background: var(--seob-amber-soft); border-color: #fbe3bf; }
+.seob-note--warn .dashicons { color: var(--seob-amber); }
+
+/* ---------- Submission log with expandable URLs ---------- */
+.seob-log__row { padding: 14px 0; border-bottom: 1px solid var(--seob-line); }
+.seob-log__row:last-child { border-bottom: none; }
+.seob-log__head { display: flex; align-items: center; gap: 10px; margin-bottom: 3px; }
+.seob-log__urls { margin-top: 10px; }
+.seob-log__urls summary {
+	cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+	font-size: 12.5px; font-weight: 600; color: var(--seob-brand);
+	list-style: none; user-select: none;
+}
+.seob-log__urls summary::-webkit-details-marker { display: none; }
+.seob-log__urls summary::before { content: "▸"; transition: transform .15s ease; display: inline-block; }
+.seob-log__urls[open] summary::before { transform: rotate(90deg); }
+.seob-log__list {
+	margin: 10px 0 0; padding: 12px 14px; list-style: none;
+	background: #fafbff; border: 1px solid var(--seob-line); border-radius: 10px;
+	max-height: 260px; overflow: auto;
+}
+.seob-log__list li { padding: 4px 0; border-bottom: 1px dashed var(--seob-line); }
+.seob-log__list li:last-child { border-bottom: none; }
+.seob-log__list a.seob-url { color: var(--seob-brand); text-decoration: none; }
+.seob-log__list a.seob-url:hover { text-decoration: underline; }

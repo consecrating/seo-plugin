@@ -44,6 +44,9 @@ class SEO_Boost_Settings {
 			'blc_frequency'          => 'daily',
 			'blc_post_types'         => array( 'post', 'page' ),
 			'blc_timeout'            => 10,
+
+			// Google Search Console.
+			'gsc_verification'       => '',
 		);
 	}
 

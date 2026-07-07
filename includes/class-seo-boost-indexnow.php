@@ -59,6 +59,80 @@ class SEO_Boost_IndexNow {
 	}
 
 	/**
+	 * Public URL where the key verification file is served.
+	 *
+	 * @return string
+	 */
+	public function get_key_file_url() {
+		return home_url( '/' . $this->get_key() . '.txt' );
+	}
+
+	/**
+	 * Confirm the key file is publicly reachable and returns the exact key.
+	 *
+	 * A failing check is the usual reason submissions stay stuck on "key
+	 * validation pending" (HTTP 202) or get rejected (HTTP 403), so this gives
+	 * the user a one-click way to diagnose it.
+	 *
+	 * @return array {
+	 *     @type bool   $reachable Whether the file responded with HTTP 200.
+	 *     @type bool   $matches   Whether the file content matches the key.
+	 *     @type int    $code      HTTP status code of the request.
+	 *     @type string $url       The key file URL that was checked.
+	 *     @type string $message   Human-readable summary.
+	 * }
+	 */
+	public function verify_key() {
+		$url      = $this->get_key_file_url();
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout'   => 15,
+				'sslverify' => true,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'reachable' => false,
+				'matches'   => false,
+				'code'      => 0,
+				'url'       => $url,
+				'message'   => sprintf(
+					/* translators: %s: error message */
+					__( 'Could not reach the key file: %s', 'seo-boost' ),
+					$response->get_error_message()
+				),
+			);
+		}
+
+		$code      = (int) wp_remote_retrieve_response_code( $response );
+		$body      = trim( (string) wp_remote_retrieve_body( $response ) );
+		$reachable = ( 200 === $code );
+		$matches   = $reachable && hash_equals( $this->get_key(), $body );
+
+		if ( $matches ) {
+			$message = __( 'Verified! Your key file is publicly accessible and search engines can validate it.', 'seo-boost' );
+		} elseif ( $reachable ) {
+			$message = __( 'The key file is reachable but its contents do not match the current key. Try re-saving or regenerating the key.', 'seo-boost' );
+		} else {
+			$message = sprintf(
+				/* translators: %d: HTTP code */
+				__( 'The key file is not accessible (HTTP %d). Go to Settings > Permalinks and click Save once to flush rewrite rules, then try again.', 'seo-boost' ),
+				$code
+			);
+		}
+
+		return array(
+			'reachable' => $reachable,
+			'matches'   => $matches,
+			'code'      => $code,
+			'url'       => $url,
+			'message'   => $message,
+		);
+	}
+
+	/**
 	 * Register the {key}.txt rewrite rule.
 	 */
 	public function add_key_file_rewrite() {
@@ -197,8 +271,8 @@ class SEO_Boost_IndexNow {
 	 */
 	private function describe_code( $code ) {
 		$map = array(
-			200 => __( 'OK - URLs submitted successfully.', 'seo-boost' ),
-			202 => __( 'Accepted - URLs received, key validation pending.', 'seo-boost' ),
+			200 => __( 'OK - URLs received and key verified.', 'seo-boost' ),
+			202 => __( 'Accepted - URLs received. The engine will verify your key file shortly (this is normal, especially on the first submission).', 'seo-boost' ),
 			400 => __( 'Bad request - invalid format.', 'seo-boost' ),
 			403 => __( 'Forbidden - key not valid or not found.', 'seo-boost' ),
 			422 => __( 'Unprocessable - URLs do not belong to the host, or the key mismatched.', 'seo-boost' ),

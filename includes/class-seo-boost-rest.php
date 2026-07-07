@@ -68,6 +68,7 @@ class SEO_Boost_REST {
 		register_rest_route( self::NAMESPACE, '/indexnow/submit', array_merge( $args_post, array( 'callback' => array( $this, 'indexnow_submit' ) ) ) );
 		register_rest_route( self::NAMESPACE, '/indexnow/submit-all', array_merge( $args_post, array( 'callback' => array( $this, 'indexnow_submit_all' ) ) ) );
 		register_rest_route( self::NAMESPACE, '/indexnow/regenerate-key', array_merge( $args_post, array( 'callback' => array( $this, 'indexnow_regenerate_key' ) ) ) );
+		register_rest_route( self::NAMESPACE, '/indexnow/verify-key', array_merge( $args_post, array( 'callback' => array( $this, 'indexnow_verify_key' ) ) ) );
 		register_rest_route( self::NAMESPACE, '/indexnow/clear-log', array_merge( $args_post, array( 'callback' => array( $this, 'indexnow_clear_log' ) ) ) );
 
 		// Broken links.
@@ -118,10 +119,16 @@ class SEO_Boost_REST {
 				'indexnow' => array(
 					'enabled'         => $this->plugin->indexnow->is_enabled(),
 					'key'             => $this->plugin->indexnow->get_key(),
+					'key_file'        => $this->plugin->indexnow->get_key_file_url(),
 					'submissions'     => count( $log ),
 					'last_submission' => $last_submission,
 				),
-				'links'    => $blc_stats,
+				'links'          => $blc_stats,
+				'search_console' => array(
+					'verified'        => $this->plugin->search_console->is_verified(),
+					'sitemaps_url'    => $this->plugin->search_console->sitemaps_dashboard_url(),
+					'add_property_url' => $this->plugin->search_console->add_property_url(),
+				),
 			)
 		);
 	}
@@ -178,6 +185,12 @@ class SEO_Boost_REST {
 		// Endpoint URL.
 		if ( isset( $in['indexnow_endpoint'] ) ) {
 			$clean['indexnow_endpoint'] = esc_url_raw( $in['indexnow_endpoint'] );
+		}
+
+		// Google Search Console verification token (accepts a raw token or a
+		// pasted <meta> tag).
+		if ( isset( $in['gsc_verification'] ) ) {
+			$clean['gsc_verification'] = SEO_Boost_Search_Console::extract_code( $in['gsc_verification'] );
 		}
 
 		$saved = SEO_Boost_Settings::update( $clean );
@@ -242,6 +255,15 @@ class SEO_Boost_REST {
 				'message' => __( 'A new IndexNow key has been generated.', 'seo-boost' ),
 			)
 		);
+	}
+
+	/**
+	 * POST /indexnow/verify-key - check the key file is publicly reachable.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function indexnow_verify_key() {
+		return rest_ensure_response( $this->plugin->indexnow->verify_key() );
 	}
 
 	/**

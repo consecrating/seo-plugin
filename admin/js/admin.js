@@ -253,10 +253,22 @@
 			var keyField = h( '<div class="seob-field"></div>' );
 			keyField.innerHTML =
 				'<label class="seob-label">Your API key</label>' +
-				'<p class="seob-hint">Served automatically at <code>' + esc( cfg.homeUrl + stats.indexnow.key + '.txt' ) + '</code></p>' +
+				'<p class="seob-hint">Served automatically at <code>' + esc( stats.indexnow.key_file || ( cfg.homeUrl + stats.indexnow.key + '.txt' ) ) + '</code></p>' +
 				'<div class="seob-keybox"><code id="seob-key">' + esc( stats.indexnow.key ) + '</code>' +
-				'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-regen" style="margin-left:auto"><span class="dashicons dashicons-update"></span> Regenerate</button></div>';
+				'<span style="margin-left:auto;display:inline-flex;gap:8px">' +
+				'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-verify-key"><span class="dashicons dashicons-yes"></span> Verify key</button>' +
+				'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-regen"><span class="dashicons dashicons-update"></span> Regenerate</button>' +
+				'</span></div>' +
+				'<div id="seob-verify-result" class="seob-mt" hidden></div>';
 			card.appendChild( keyField );
+
+			var note = h( '<div class="seob-field"></div>' );
+			note.innerHTML =
+				'<div class="seob-note"><span class="dashicons dashicons-info-outline"></span>' +
+				'<div><strong>About "key validation pending" (HTTP 202)</strong>' +
+				'<p class="seob-hint" style="margin:4px 0 0">This is normal — the engine accepted your URLs and will validate your key file within minutes. ' +
+				'It only becomes a problem if it never turns into HTTP 200. Click <em>Verify key</em> above to confirm your key file is publicly reachable.</p></div></div>';
+			card.appendChild( note );
 			view.appendChild( card );
 
 			/* Manual submit card */
@@ -294,6 +306,26 @@
 				api( '/indexnow/regenerate-key', 'POST' ).then( function ( r ) {
 					document.getElementById( 'seob-key' ).textContent = r.key;
 					toast( r.message, 'success' );
+				} );
+			} );
+
+			document.getElementById( 'seob-verify-key' ).addEventListener( 'click', function ( e ) {
+				var box = document.getElementById( 'seob-verify-result' );
+				setBusy( e.target, true );
+				api( '/indexnow/verify-key', 'POST' ).then( function ( r ) {
+					setBusy( e.target, false );
+					var ok = r.matches;
+					box.hidden = false;
+					box.innerHTML =
+						'<div class="seob-note seob-note--' + ( ok ? 'ok' : 'warn' ) + '">' +
+						'<span class="dashicons dashicons-' + ( ok ? 'yes-alt' : 'warning' ) + '"></span>' +
+						'<div><strong>' + ( ok ? 'Key file verified' : 'Key file issue' ) + '</strong>' +
+						'<p class="seob-hint" style="margin:4px 0 0">' + esc( r.message ) + '</p>' +
+						'<p class="seob-hint" style="margin:4px 0 0"><a href="' + esc( r.url ) + '" target="_blank" rel="noopener">' + esc( r.url ) + '</a></p></div></div>';
+					toast( ok ? 'Key verified.' : 'Key not verified — see details.', ok ? 'success' : 'error' );
+				} ).catch( function () {
+					setBusy( e.target, false );
+					toast( cfg.i18n.error, 'error' );
 				} );
 			} );
 
@@ -344,8 +376,30 @@
 			var badge = item.success
 				? '<span class="seob-badge seob-badge--ok">HTTP ' + esc( item.code ) + '</span>'
 				: '<span class="seob-badge seob-badge--broken">HTTP ' + esc( item.code ) + '</span>';
-			return '<div class="seob-list__row"><div><strong>' + num( item.count ) + ' URL(s)</strong>' +
-				'<br><small>' + esc( item.time ) + ' — ' + esc( item.message ) + '</small></div>' + badge + '</div>';
+
+			var urls = Array.isArray( item.urls ) ? item.urls : [];
+			var urlsHTML = '';
+			if ( urls.length ) {
+				var links = urls
+					.map( function ( u ) {
+						return '<li><a href="' + esc( u ) + '" target="_blank" rel="noopener" class="seob-url">' + esc( u ) + '</a></li>';
+					} )
+					.join( '' );
+				urlsHTML =
+					'<details class="seob-log__urls">' +
+					'<summary>' + ( urls.length === 1 ? 'Show URL' : 'Show ' + num( urls.length ) + ' URLs' ) + '</summary>' +
+					'<ul class="seob-log__list">' + links + '</ul>' +
+					'</details>';
+			}
+
+			return (
+				'<div class="seob-log__row">' +
+				'<div class="seob-log__main">' +
+				'<div class="seob-log__head"><strong>' + num( item.count ) + ' URL(s)</strong> ' + badge + '</div>' +
+				'<small class="seob-muted">' + esc( item.time ) + ' — ' + esc( item.message ) + '</small>' +
+				urlsHTML +
+				'</div></div>'
+			);
 		} ).join( '' );
 		el.innerHTML = '<div class="seob-list">' + rows + '</div>';
 	}
@@ -566,6 +620,86 @@
 		}, 1200 );
 	}
 
+	/* ===== Google Search Console ===== */
+	Views[ '/search-console' ] = function () {
+		loading();
+		setHeader( 'Search Console', 'Connect your site to Google Search Console.' );
+		Promise.all( [ api( '/settings' ), api( '/stats' ) ] ).then( function ( res ) {
+			var st = res[ 0 ];
+			var stats = res[ 1 ];
+			var gsc = stats.search_console || {};
+			var sitemapUrl = cfg.homeUrl + 'sitemap.xml';
+			view.innerHTML = '';
+
+			/* Status banner */
+			var status = h( '<div class="seob-card"></div>' );
+			var verified = !! gsc.verified;
+			status.innerHTML =
+				'<div class="seob-card__head"><div><h2>Connection status</h2>' +
+				'<p>Google uses site verification to confirm you own this site.</p></div>' +
+				'<span class="seob-badge seob-badge--' + ( verified ? 'on">Verified' : 'off">Not verified' ) + '</span></div>' +
+				'<div class="seob-note seob-note--' + ( verified ? 'ok' : 'warn' ) + '">' +
+				'<span class="dashicons dashicons-' + ( verified ? 'yes-alt' : 'info-outline' ) + '"></span>' +
+				'<div><p class="seob-hint" style="margin:0">' +
+				( verified
+					? 'A verification tag is active in your site\'s &lt;head&gt;. You can now add this property in Search Console (if you haven\'t already).'
+					: 'Paste your Google verification code below to add the meta tag automatically — no file uploads or DNS changes needed.' ) +
+				'</p></div></div>';
+			view.appendChild( status );
+
+			/* Verification card */
+			var card = h( '<div class="seob-card seob-mt"></div>' );
+			card.innerHTML =
+				'<div class="seob-card__head"><div><h2>1. Verify ownership (HTML tag method)</h2>' +
+				'<p>In Search Console choose <em>HTML tag</em> verification, copy the tag, and paste it here.</p></div></div>' +
+				'<div class="seob-field">' +
+				'<label class="seob-label">Google verification code or meta tag</label>' +
+				'<p class="seob-hint">Paste the whole <code>&lt;meta name="google-site-verification" ...&gt;</code> tag or just the code — we\'ll extract it.</p>' +
+				'<input class="seob-input" type="text" name="gsc_verification" value="' + esc( st.gsc_verification || '' ) + '" ' +
+				'placeholder="&lt;meta name=&quot;google-site-verification&quot; content=&quot;abc123...&quot; /&gt;" style="max-width:640px">' +
+				'</div>' +
+				'<a class="seob-btn seob-btn--ghost seob-btn--sm" target="_blank" rel="noopener" href="' +
+				esc( gsc.add_property_url || 'https://search.google.com/search-console' ) + '"><span class="dashicons dashicons-external"></span> Open Search Console</a>';
+			view.appendChild( card );
+
+			/* Sitemap submission card */
+			var sm = h( '<div class="seob-card seob-mt"></div>' );
+			sm.innerHTML =
+				'<div class="seob-card__head"><div><h2>2. Submit your sitemap</h2>' +
+				'<p>After verifying, add your sitemap so Google can discover every page.</p></div></div>' +
+				'<div class="seob-keybox"><code>' + esc( sitemapUrl ) + '</code>' +
+				'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-copy-sitemap" style="margin-left:auto"><span class="dashicons dashicons-clipboard"></span> Copy</button></div>' +
+				'<div class="seob-mt">' +
+				'<a class="seob-btn seob-btn--primary" target="_blank" rel="noopener" href="' +
+				esc( gsc.sitemaps_url || 'https://search.google.com/search-console/sitemaps' ) + '"><span class="dashicons dashicons-external"></span> Open Sitemaps in Search Console</a></div>' +
+				'<p class="seob-hint seob-mt">In the Sitemaps screen, paste <code>sitemap.xml</code> into the "Add a new sitemap" box and click Submit.</p>';
+			view.appendChild( sm );
+
+			/* Note about full API */
+			var note = h( '<div class="seob-card seob-mt"></div>' );
+			note.innerHTML =
+				'<div class="seob-card__head"><div><h2>Want automatic API access?</h2></div></div>' +
+				'<p class="seob-hint" style="margin:0">This connects your site using Google\'s official <em>HTML tag</em> method, which needs no Google Cloud setup. ' +
+				'Full API access (to pull search analytics into this dashboard) requires creating a Google Cloud OAuth app — tell us if you\'d like that added.</p>';
+			view.appendChild( note );
+
+			setHeader( 'Search Console', 'Connect your site to Google Search Console.', primarySaveBtn() );
+			bindSave( function () {
+				return { gsc_verification: document.querySelector( '[name="gsc_verification"]' ).value };
+			} );
+
+			var copyBtn = document.getElementById( 'seob-copy-sitemap' );
+			if ( copyBtn ) {
+				copyBtn.addEventListener( 'click', function () {
+					copyText( sitemapUrl );
+					toast( 'Sitemap URL copied.', 'success' );
+				} );
+			}
+		} ).catch( function () {
+			view.innerHTML = errorState();
+		} );
+	};
+
 	/* ===== Settings ===== */
 	Views[ '/settings' ] = function () {
 		loading();
@@ -724,6 +858,23 @@
 	function errorState() {
 		return '<div class="seob-empty"><span class="dashicons dashicons-warning" style="color:var(--seob-red)"></span>' +
 			'<h3>Could not load data</h3><p>Please refresh the page or check your permissions.</p></div>';
+	}
+
+	function copyText( text ) {
+		if ( navigator.clipboard && navigator.clipboard.writeText ) {
+			navigator.clipboard.writeText( text );
+			return;
+		}
+		var ta = document.createElement( 'textarea' );
+		ta.value = text;
+		ta.style.position = 'fixed';
+		ta.style.opacity = '0';
+		document.body.appendChild( ta );
+		ta.select();
+		try {
+			document.execCommand( 'copy' );
+		} catch ( e ) {}
+		document.body.removeChild( ta );
 	}
 
 	function updateBadge( count ) {
