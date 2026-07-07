@@ -47,6 +47,33 @@ class SEO_Boost_Settings {
 
 			// Google Search Console.
 			'gsc_verification'       => '',
+
+			// Structured data / Local SEO (Schema.org).
+			'schema_enabled'         => 1,
+			'schema_type'            => 'Organization', // Organization | LocalBusiness | ProfessionalService.
+			'org_name'               => '',
+			'org_logo'               => '',
+			'org_phone'              => '',
+			'org_email'              => '',
+			'org_street'             => '',
+			'org_locality'           => '', // City, e.g. Panaji.
+			'org_region'             => '', // State, e.g. Goa.
+			'org_postal'             => '',
+			'org_country'            => 'IN',
+			'org_lat'                => '',
+			'org_lng'                => '',
+			'org_area_served'        => '', // e.g. Goa.
+			'org_price_range'        => '',
+			'org_hours'              => '', // e.g. Mo-Sa 09:00-18:00.
+			'social_profiles'        => array(),
+			'schema_article'         => 1,
+			'schema_breadcrumbs'     => 1,
+			'schema_searchbox'       => 1,
+
+			// Content freshness.
+			'freshness_post_types'   => array( 'post' ),
+			'freshness_aging_months' => 3,
+			'freshness_stale_months' => 6,
 		);
 	}
 

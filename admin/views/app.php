@@ -46,6 +46,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<span class="seob-ic dashicons dashicons-google"></span>
 				<?php esc_html_e( 'Search Console', 'seo-boost' ); ?>
 			</a>
+			<a href="#/local-seo" class="seob-nav__item" data-route="/local-seo">
+				<span class="seob-ic dashicons dashicons-location-alt"></span>
+				<?php esc_html_e( 'Local SEO & Schema', 'seo-boost' ); ?>
+			</a>
+			<a href="#/content" class="seob-nav__item" data-route="/content">
+				<span class="seob-ic dashicons dashicons-backup"></span>
+				<?php esc_html_e( 'Content Freshness', 'seo-boost' ); ?>
+			</a>
 			<a href="#/links" class="seob-nav__item" data-route="/links">
 				<span class="seob-ic dashicons dashicons-admin-links"></span>
 				<?php esc_html_e( 'Broken Links', 'seo-boost' ); ?>

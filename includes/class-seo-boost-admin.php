@@ -87,6 +87,7 @@ class SEO_Boost_Admin {
 				'root'       => esc_url_raw( rest_url( SEO_Boost_REST::NAMESPACE ) ),
 				'nonce'      => wp_create_nonce( 'wp_rest' ),
 				'version'    => SEO_BOOST_VERSION,
+				'siteName'   => get_bloginfo( 'name' ),
 				'homeUrl'    => home_url( '/' ),
 				'adminUrl'   => admin_url(),
 				'postTypes'  => $this->get_public_post_types(),
