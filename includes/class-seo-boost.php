@@ -57,6 +57,20 @@ final class SEO_Boost {
 	public $search_console;
 
 	/**
+	 * Schema / structured data module.
+	 *
+	 * @var SEO_Boost_Schema
+	 */
+	public $schema;
+
+	/**
+	 * Content freshness module.
+	 *
+	 * @var SEO_Boost_Freshness
+	 */
+	public $freshness;
+
+	/**
 	 * REST API module.
 	 *
 	 * @var SEO_Boost_REST
@@ -93,6 +107,8 @@ final class SEO_Boost {
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-indexnow.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-broken-links.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-search-console.php';
+		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-schema.php';
+		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-freshness.php';
 		require_once SEO_BOOST_PATH . 'includes/class-seo-boost-rest.php';
 
 		if ( is_admin() ) {
@@ -108,6 +124,8 @@ final class SEO_Boost {
 		$this->indexnow       = new SEO_Boost_IndexNow();
 		$this->broken_links   = new SEO_Boost_Broken_Links();
 		$this->search_console = new SEO_Boost_Search_Console();
+		$this->schema         = new SEO_Boost_Schema();
+		$this->freshness      = new SEO_Boost_Freshness();
 		$this->rest           = new SEO_Boost_REST( $this );
 
 		if ( is_admin() ) {

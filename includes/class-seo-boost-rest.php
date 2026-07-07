@@ -95,6 +95,24 @@ class SEO_Boost_REST {
 			'/links/(?P<id>\d+)/recheck',
 			array_merge( $args_post, array( 'callback' => array( $this, 'links_recheck' ) ) )
 		);
+
+		// Content freshness.
+		register_rest_route(
+			self::NAMESPACE,
+			'/freshness',
+			array_merge(
+				$args_get,
+				array(
+					'callback' => array( $this, 'get_freshness' ),
+					'args'     => array(
+						'filter'   => array( 'default' => 'stale' ),
+						'page'     => array( 'default' => 1 ),
+						'per_page' => array( 'default' => 20 ),
+						'search'   => array( 'default' => '' ),
+					),
+				)
+			)
+		);
 	}
 
 	/**
@@ -129,8 +147,33 @@ class SEO_Boost_REST {
 					'sitemaps_url'    => $this->plugin->search_console->sitemaps_dashboard_url(),
 					'add_property_url' => $this->plugin->search_console->add_property_url(),
 				),
+				'schema'         => array(
+					'enabled'    => $this->plugin->schema->is_enabled(),
+					'type'       => SEO_Boost_Settings::get( 'schema_type', 'Organization' ),
+					'configured' => $this->plugin->schema->is_configured(),
+				),
+				'freshness'      => $this->plugin->freshness->get_summary(),
 			)
 		);
+	}
+
+	/**
+	 * GET /freshness - content freshness audit data.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_freshness( WP_REST_Request $request ) {
+		$data            = $this->plugin->freshness->get_content(
+			array(
+				'filter'   => sanitize_key( $request->get_param( 'filter' ) ),
+				'page'     => max( 1, (int) $request->get_param( 'page' ) ),
+				'per_page' => max( 1, min( 100, (int) $request->get_param( 'per_page' ) ) ),
+				'search'   => sanitize_text_field( (string) $request->get_param( 'search' ) ),
+			)
+		);
+		$data['summary'] = $this->plugin->freshness->get_summary();
+		return rest_ensure_response( $data );
 	}
 
 	/**
@@ -154,7 +197,18 @@ class SEO_Boost_REST {
 		$clean = array();
 
 		// Booleans.
-		foreach ( array( 'sitemap_enabled', 'sitemap_include_images', 'indexnow_enabled', 'indexnow_auto_submit', 'blc_enabled' ) as $key ) {
+		$bool_keys = array(
+			'sitemap_enabled',
+			'sitemap_include_images',
+			'indexnow_enabled',
+			'indexnow_auto_submit',
+			'blc_enabled',
+			'schema_enabled',
+			'schema_article',
+			'schema_breadcrumbs',
+			'schema_searchbox',
+		);
+		foreach ( $bool_keys as $key ) {
 			if ( array_key_exists( $key, $in ) ) {
 				$clean[ $key ] = ! empty( $in[ $key ] ) ? 1 : 0;
 			}
@@ -167,12 +221,65 @@ class SEO_Boost_REST {
 		if ( isset( $in['blc_timeout'] ) ) {
 			$clean['blc_timeout'] = max( 3, min( 60, (int) $in['blc_timeout'] ) );
 		}
+		if ( isset( $in['freshness_aging_months'] ) ) {
+			$clean['freshness_aging_months'] = max( 1, min( 60, (int) $in['freshness_aging_months'] ) );
+		}
+		if ( isset( $in['freshness_stale_months'] ) ) {
+			$clean['freshness_stale_months'] = max( 2, min( 120, (int) $in['freshness_stale_months'] ) );
+		}
 
 		// Arrays of slugs.
-		foreach ( array( 'sitemap_post_types', 'sitemap_taxonomies', 'blc_post_types' ) as $key ) {
+		foreach ( array( 'sitemap_post_types', 'sitemap_taxonomies', 'blc_post_types', 'freshness_post_types' ) as $key ) {
 			if ( isset( $in[ $key ] ) && is_array( $in[ $key ] ) ) {
 				$clean[ $key ] = array_values( array_map( 'sanitize_key', $in[ $key ] ) );
 			}
+		}
+
+		// Local SEO / schema plain-text fields.
+		$text_keys = array(
+			'org_name',
+			'org_phone',
+			'org_email',
+			'org_street',
+			'org_locality',
+			'org_region',
+			'org_postal',
+			'org_country',
+			'org_area_served',
+			'org_price_range',
+			'org_hours',
+		);
+		foreach ( $text_keys as $key ) {
+			if ( isset( $in[ $key ] ) ) {
+				$clean[ $key ] = sanitize_text_field( (string) $in[ $key ] );
+			}
+		}
+
+		// Coordinates (kept as trimmed strings; cast to float on output).
+		foreach ( array( 'org_lat', 'org_lng' ) as $key ) {
+			if ( isset( $in[ $key ] ) ) {
+				$val           = trim( (string) $in[ $key ] );
+				$clean[ $key ] = ( '' === $val || is_numeric( $val ) ) ? $val : '';
+			}
+		}
+
+		// Logo + social profile URLs.
+		if ( isset( $in['org_logo'] ) ) {
+			$clean['org_logo'] = esc_url_raw( (string) $in['org_logo'] );
+		}
+		if ( isset( $in['social_profiles'] ) ) {
+			$profiles = $in['social_profiles'];
+			if ( is_string( $profiles ) ) {
+				$profiles = preg_split( '/\r\n|\r|\n/', $profiles );
+			}
+			$profiles                  = is_array( $profiles ) ? $profiles : array();
+			$clean['social_profiles']  = array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $profiles ) ) ) );
+		}
+
+		// Schema entity type (validated).
+		if ( isset( $in['schema_type'] ) ) {
+			$allowed             = array( 'Organization', 'LocalBusiness', 'ProfessionalService' );
+			$clean['schema_type'] = in_array( $in['schema_type'], $allowed, true ) ? $in['schema_type'] : 'Organization';
 		}
 
 		// Frequency (validate against known schedules).

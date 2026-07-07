@@ -119,6 +119,14 @@
 				statTile( 'green', 'yes-alt', num( s.links.ok ), 'Healthy links', num( s.links.total ) + ' total checked' )
 			);
 			grid.appendChild( statTile( s.links.broken > 0 ? 'red' : 'green', 'admin-links', num( s.links.broken ), 'Broken links', brokenMeta ) );
+
+			var fr = s.freshness || { stale: 0, aging: 0, avg_score: 100, total: 0 };
+			var freshColor = fr.stale > 0 ? 'amber' : 'green';
+			var freshMeta =
+				fr.stale > 0
+					? '<span style="color:var(--seob-amber)">' + num( fr.stale ) + ' need refreshing</span>'
+					: '<span style="color:var(--seob-green)">Content is current</span>';
+			grid.appendChild( statTile( freshColor, 'backup', ( fr.avg_score != null ? fr.avg_score : 100 ) + '%', 'Content freshness', freshMeta ) );
 			view.appendChild( grid );
 
 			/* Feature rows */
@@ -152,6 +160,34 @@
 
 			view.appendChild( row );
 
+			/* Second feature row: Local SEO + Content freshness */
+			var row2 = h( '<div class="seob-grid seob-grid--2 seob-mt"></div>' );
+
+			var sc = s.schema || { enabled: false, type: 'Organization', configured: false };
+			var localCard = h( '<div class="seob-card"></div>' );
+			localCard.innerHTML =
+				'<div class="seob-card__head"><div><h2>Local SEO &amp; Schema</h2><p>Structured data helps you win rich results &amp; the local pack.</p></div>' +
+				'<span class="seob-badge seob-badge--' + ( sc.enabled ? 'on">Active' : 'off">Off' ) + '</span></div>' +
+				( sc.configured
+					? '<p class="seob-muted">Publishing <strong>' + esc( sc.type ) + '</strong> schema with your business details.</p>'
+					: '<div class="seob-note seob-note--warn"><span class="dashicons dashicons-info-outline"></span><div><p class="seob-hint" style="margin:0">Add your business name, address &amp; phone to unlock local search results.</p></div></div>' ) +
+				'<div class="seob-mt"><a class="seob-btn seob-btn--primary seob-btn--sm" href="#/local-seo"><span class="dashicons dashicons-location-alt"></span> ' +
+				( sc.configured ? 'Manage schema' : 'Set up Local SEO' ) + '</a></div>';
+			row2.appendChild( localCard );
+
+			var freshCard = h( '<div class="seob-card"></div>' );
+			freshCard.innerHTML =
+				'<div class="seob-card__head"><div><h2>Content Freshness</h2><p>Fresh, updated content ranks better over time.</p></div></div>' +
+				'<div class="seob-list">' +
+				'<div class="seob-list__row"><span>Fresh</span><strong style="color:var(--seob-green)">' + num( fr.fresh ) + '</strong></div>' +
+				'<div class="seob-list__row"><span>Aging</span><strong style="color:var(--seob-amber)">' + num( fr.aging ) + '</strong></div>' +
+				'<div class="seob-list__row"><span>Stale</span><strong style="color:var(--seob-red)">' + num( fr.stale ) + '</strong></div>' +
+				'</div>' +
+				'<div class="seob-mt"><a class="seob-btn seob-btn--primary seob-btn--sm" href="#/content"><span class="dashicons dashicons-backup"></span> Audit content</a></div>';
+			row2.appendChild( freshCard );
+
+			view.appendChild( row2 );
+
 			/* Broken links call to action */
 			if ( s.links.broken > 0 ) {
 				var cta = h( '<div class="seob-card seob-mt"></div>' );
@@ -160,6 +196,16 @@
 					'<p>Broken links hurt user experience and crawlability. Review and fix them.</p></div>' +
 					'<a class="seob-btn seob-btn--primary" href="#/links">Review links</a></div>';
 				view.appendChild( cta );
+			}
+
+			/* Stale content call to action */
+			if ( fr.stale > 0 ) {
+				var staleCta = h( '<div class="seob-card seob-mt"></div>' );
+				staleCta.innerHTML =
+					'<div class="seob-card__head"><div><h2>🕒 ' + num( fr.stale ) + ' page(s) need refreshing</h2>' +
+					'<p>Content not updated in over ' + num( fr.stale_months ) + ' months may be losing rankings. Refresh it to signal freshness.</p></div>' +
+					'<a class="seob-btn seob-btn--primary" href="#/content">Review content</a></div>';
+				view.appendChild( staleCta );
 			}
 
 			var qs = document.getElementById( 'seob-quick-submitall' );
@@ -700,6 +746,294 @@
 		} );
 	};
 
+	/* ===== Local SEO & Schema ===== */
+	Views[ '/local-seo' ] = function () {
+		loading();
+		setHeader( 'Local SEO & Schema', 'Structured data for rich results and the local pack.' );
+		api( '/settings' ).then( function ( st ) {
+			view.innerHTML = '';
+			var isLocal = st.schema_type && st.schema_type !== 'Organization';
+
+			/* Toggle + type */
+			var typeCard = h( '<div class="seob-card"></div>' );
+			typeCard.innerHTML = '<div class="seob-card__head"><div><h2>Structured data</h2><p>Tell Google exactly what your business is.</p></div></div>';
+			typeCard.appendChild( toggleField( 'schema_enabled', 'Enable structured data output', 'Adds JSON-LD schema to your site\u2019s &lt;head&gt;.', st.schema_enabled ) );
+			typeCard.appendChild(
+				selectField( 'schema_type', 'Business type', st.schema_type || 'Organization', [
+					[ 'Organization', 'Organization (general company)' ],
+					[ 'LocalBusiness', 'Local Business (has a physical location)' ],
+					[ 'ProfessionalService', 'Professional Service (agency, consultancy)' ],
+				] )
+			);
+			typeCard.appendChild(
+				h( '<p class="seob-hint" style="margin:0">For a Goa digital marketing agency, <strong>ProfessionalService</strong> or <strong>Local Business</strong> unlocks local-pack features like maps, hours and service areas.</p>' )
+			);
+			view.appendChild( typeCard );
+
+			/* Business details */
+			var napCard = h( '<div class="seob-card seob-mt"></div>' );
+			napCard.innerHTML = '<div class="seob-card__head"><div><h2>Business details (NAP)</h2><p>Name, address &amp; phone \u2014 keep these consistent everywhere online.</p></div></div>';
+			napCard.appendChild( textField( 'org_name', 'Business name', 'Leave blank to use your site title.', st.org_name, cfg.siteName || 'Your Agency', '640px' ) );
+			napCard.appendChild( textField( 'org_logo', 'Logo URL', 'A square logo works best for Google.', st.org_logo, 'https://\u2026/logo.png', '640px' ) );
+
+			var r1 = fieldRow();
+			r1.appendChild( wrapFlex( textField( 'org_phone', 'Phone', '', st.org_phone, '+91 \u2026' ) ) );
+			r1.appendChild( wrapFlex( textField( 'org_email', 'Email', '', st.org_email, 'hello@\u2026' ) ) );
+			napCard.appendChild( r1 );
+
+			napCard.appendChild( textField( 'org_street', 'Street address', '', st.org_street, 'Shop 1, MG Road', '640px' ) );
+
+			var r2 = fieldRow();
+			r2.appendChild( wrapFlex( textField( 'org_locality', 'City', '', st.org_locality, 'Panaji' ) ) );
+			r2.appendChild( wrapFlex( textField( 'org_region', 'State / region', '', st.org_region, 'Goa' ) ) );
+			napCard.appendChild( r2 );
+
+			var r3 = fieldRow();
+			r3.appendChild( wrapFlex( textField( 'org_postal', 'Postal code', '', st.org_postal, '403001' ) ) );
+			r3.appendChild( wrapFlex( textField( 'org_country', 'Country code', '', st.org_country, 'IN' ) ) );
+			napCard.appendChild( r3 );
+
+			var r4 = fieldRow();
+			r4.appendChild( wrapFlex( textField( 'org_lat', 'Latitude', '', st.org_lat, '15.4909' ) ) );
+			r4.appendChild( wrapFlex( textField( 'org_lng', 'Longitude', '', st.org_lng, '73.8278' ) ) );
+			napCard.appendChild( r4 );
+			view.appendChild( napCard );
+
+			/* Local-business extras */
+			var localCard = h( '<div class="seob-card seob-mt"></div>' );
+			localCard.innerHTML =
+				'<div class="seob-card__head"><div><h2>Local business extras</h2>' +
+				'<p>Shown for Local Business / Professional Service types.</p></div></div>';
+			localCard.appendChild( textField( 'org_area_served', 'Area served', 'e.g. the region you serve.', st.org_area_served, 'Goa', '640px' ) );
+			var r5 = fieldRow();
+			r5.appendChild( wrapFlex( textField( 'org_price_range', 'Price range', '', st.org_price_range, '$$' ) ) );
+			r5.appendChild( wrapFlex( textField( 'org_hours', 'Opening hours', '', st.org_hours, 'Mo-Sa 09:00-18:00' ) ) );
+			localCard.appendChild( r5 );
+			view.appendChild( localCard );
+
+			/* Social profiles */
+			var socialCard = h( '<div class="seob-card seob-mt"></div>' );
+			socialCard.innerHTML = '<div class="seob-card__head"><div><h2>Social profiles</h2><p>Linked as <code>sameAs</code> \u2014 helps Google connect your brand.</p></div></div>';
+			socialCard.appendChild(
+				textareaField(
+					'social_profiles',
+					'Profile URLs (one per line)',
+					'',
+					( st.social_profiles || [] ).join( '\n' ),
+					'https://facebook.com/youragency\nhttps://instagram.com/youragency\nhttps://linkedin.com/company/youragency'
+				)
+			);
+			view.appendChild( socialCard );
+
+			/* Rich result toggles */
+			var richCard = h( '<div class="seob-card seob-mt"></div>' );
+			richCard.innerHTML = '<div class="seob-card__head"><div><h2>Rich results</h2><p>Extra schema types on your pages.</p></div></div>';
+			richCard.appendChild( toggleField( 'schema_article', 'Article schema on posts', 'Includes published &amp; modified dates (a freshness signal).', st.schema_article ) );
+			richCard.appendChild( toggleField( 'schema_breadcrumbs', 'Breadcrumb schema', 'Shows breadcrumb trails in search results.', st.schema_breadcrumbs ) );
+			richCard.appendChild( toggleField( 'schema_searchbox', 'Sitelinks search box', 'Lets Google show a search box for your site.', st.schema_searchbox ) );
+			richCard.appendChild(
+				h( '<div class="seob-mt"><a class="seob-btn seob-btn--ghost seob-btn--sm" target="_blank" rel="noopener" href="https://search.google.com/test/rich-results?url=' +
+					encodeURIComponent( cfg.homeUrl ) + '"><span class="dashicons dashicons-external"></span> Test with Google Rich Results</a></div>' )
+			);
+			view.appendChild( richCard );
+
+			setHeader( 'Local SEO & Schema', 'Structured data for rich results and the local pack.', primarySaveBtn() );
+			bindSave( collectLocalSeo );
+
+			if ( isLocal ) { /* reserved for future conditional UI */ }
+		} ).catch( function () {
+			view.innerHTML = errorState();
+		} );
+	};
+
+	function wrapFlex( node ) {
+		var w = h( '<div class="seob-flex1"></div>' );
+		node.style.marginBottom = '0';
+		w.appendChild( node );
+		return w;
+	}
+
+	function fieldVal( name ) {
+		var el = document.querySelector( '[name="' + name + '"]' );
+		return el ? el.value : '';
+	}
+
+	function collectLocalSeo() {
+		return {
+			schema_enabled: getToggle( 'schema_enabled' ),
+			schema_type: fieldVal( 'schema_type' ),
+			org_name: fieldVal( 'org_name' ),
+			org_logo: fieldVal( 'org_logo' ),
+			org_phone: fieldVal( 'org_phone' ),
+			org_email: fieldVal( 'org_email' ),
+			org_street: fieldVal( 'org_street' ),
+			org_locality: fieldVal( 'org_locality' ),
+			org_region: fieldVal( 'org_region' ),
+			org_postal: fieldVal( 'org_postal' ),
+			org_country: fieldVal( 'org_country' ),
+			org_lat: fieldVal( 'org_lat' ),
+			org_lng: fieldVal( 'org_lng' ),
+			org_area_served: fieldVal( 'org_area_served' ),
+			org_price_range: fieldVal( 'org_price_range' ),
+			org_hours: fieldVal( 'org_hours' ),
+			social_profiles: fieldVal( 'social_profiles' ),
+			schema_article: getToggle( 'schema_article' ),
+			schema_breadcrumbs: getToggle( 'schema_breadcrumbs' ),
+			schema_searchbox: getToggle( 'schema_searchbox' ),
+		};
+	}
+
+	/* ===== Content Freshness ===== */
+	var freshState = { filter: 'stale', page: 1, search: '' };
+
+	Views[ '/content' ] = function () {
+		setHeader( 'Content Freshness', 'Keep your content current to protect rankings.' );
+		freshState.page = 1;
+		renderFreshnessShell();
+		loadFreshness();
+	};
+
+	function renderFreshnessShell() {
+		view.innerHTML = '';
+		var summary = h( '<div class="seob-grid seob-grid--stats" id="seob-fresh-summary"></div>' );
+		view.appendChild( summary );
+
+		var card = h( '<div class="seob-card seob-mt"></div>' );
+		card.innerHTML =
+			'<div class="seob-toolbar">' +
+			'<div class="seob-tabs" id="seob-fresh-filters">' +
+			freshTab( 'stale', 'Stale' ) +
+			freshTab( 'aging', 'Aging' ) +
+			freshTab( 'fresh', 'Fresh' ) +
+			freshTab( 'all', 'All' ) +
+			'</div>' +
+			'<div class="seob-search"><span class="dashicons dashicons-search"></span>' +
+			'<input type="search" id="seob-fresh-search" placeholder="Search content…"></div>' +
+			'</div>' +
+			'<div id="seob-fresh-body"></div>';
+		view.appendChild( card );
+
+		card.querySelectorAll( '#seob-fresh-filters button' ).forEach( function ( b ) {
+			b.addEventListener( 'click', function () {
+				freshState.filter = b.dataset.filter;
+				freshState.page = 1;
+				card.querySelectorAll( '#seob-fresh-filters button' ).forEach( function ( x ) {
+					x.classList.toggle( 'is-active', x === b );
+				} );
+				loadFreshness();
+			} );
+		} );
+
+		var searchInput = document.getElementById( 'seob-fresh-search' );
+		var timer;
+		searchInput.addEventListener( 'input', function () {
+			clearTimeout( timer );
+			timer = setTimeout( function () {
+				freshState.search = searchInput.value;
+				freshState.page = 1;
+				loadFreshness();
+			}, 350 );
+		} );
+	}
+
+	function freshTab( filter, label ) {
+		var active = freshState.filter === filter ? ' is-active' : '';
+		return '<button class="' + active.trim() + '" data-filter="' + filter + '">' + label + '</button>';
+	}
+
+	function loadFreshness() {
+		var body = document.getElementById( 'seob-fresh-body' );
+		body.innerHTML = '<div class="seob-loading"><span class="seob-spinner"></span> Analysing content…</div>';
+		var q =
+			'/freshness?filter=' + encodeURIComponent( freshState.filter ) +
+			'&page=' + freshState.page +
+			'&per_page=20&search=' + encodeURIComponent( freshState.search );
+		api( q ).then( function ( d ) {
+			renderFreshnessSummary( d.summary );
+			renderFreshnessTable( d );
+		} ).catch( function () {
+			body.innerHTML = errorState();
+		} );
+	}
+
+	function renderFreshnessSummary( s ) {
+		s = s || { fresh: 0, aging: 0, stale: 0, avg_score: 100 };
+		var el = document.getElementById( 'seob-fresh-summary' );
+		if ( ! el ) {
+			return;
+		}
+		el.innerHTML = '';
+		el.appendChild( statTile( s.avg_score >= 70 ? 'green' : 'amber', 'chart-bar', ( s.avg_score != null ? s.avg_score : 100 ) + '%', 'Avg freshness score', s.total + ' items' ) );
+		el.appendChild( statTile( 'green', 'yes-alt', num( s.fresh ), 'Fresh', 'Updated recently' ) );
+		el.appendChild( statTile( 'amber', 'clock', num( s.aging ), 'Aging', 'Older than ' + num( s.aging_months ) + ' months' ) );
+		el.appendChild( statTile( s.stale > 0 ? 'red' : 'green', 'backup', num( s.stale ), 'Stale', 'Older than ' + num( s.stale_months ) + ' months' ) );
+	}
+
+	function freshBadge( status, score ) {
+		var map = { fresh: 'ok', aging: 'redirect', stale: 'broken' };
+		var cls = map[ status ] || 'pending';
+		var label = status.charAt( 0 ).toUpperCase() + status.slice( 1 );
+		return '<span class="seob-badge seob-badge--' + cls + '">' + esc( label ) + ' · ' + score + '%</span>';
+	}
+
+	function renderFreshnessTable( d ) {
+		var body = document.getElementById( 'seob-fresh-body' );
+		if ( ! d.items || ! d.items.length ) {
+			body.innerHTML =
+				'<div class="seob-empty"><span class="dashicons dashicons-yes-alt"></span>' +
+				'<h3>Nothing here</h3><p>' +
+				( freshState.filter === 'stale' ? 'No stale content \u2014 your content is nicely up to date!' : 'No content matches this view.' ) +
+				'</p></div>';
+			return;
+		}
+
+		var rows = d.items.map( function ( it ) {
+			var ageText = it.days === 0 ? 'today' : num( it.days ) + ' days ago';
+			return (
+				'<tr>' +
+				'<td><div class="seob-url" style="font-family:inherit;font-weight:600">' + esc( it.title || '(no title)' ) + '</div>' +
+				'<div class="seob-anchor">' + esc( it.url ) + '</div></td>' +
+				'<td><span class="seob-muted">' + esc( it.post_type ) + '</span></td>' +
+				'<td><small class="seob-muted">' + esc( it.modified ) + '<br>' + ageText + '</small></td>' +
+				'<td>' + freshBadge( it.status, it.score ) + '</td>' +
+				'<td style="text-align:right;white-space:nowrap">' +
+				( it.edit_link ? '<a class="seob-btn seob-btn--primary seob-btn--sm" target="_blank" rel="noopener" href="' + esc( it.edit_link ) + '"><span class="dashicons dashicons-edit"></span> Refresh</a> ' : '' ) +
+				( it.url ? '<a class="seob-btn seob-btn--ghost seob-btn--sm" target="_blank" rel="noopener" href="' + esc( it.url ) + '"><span class="dashicons dashicons-external"></span></a>' : '' ) +
+				'</td></tr>'
+			);
+		} ).join( '' );
+
+		var totalPages = Math.max( 1, Math.ceil( d.total / 20 ) );
+		body.innerHTML =
+			'<table class="seob-table"><thead><tr>' +
+			'<th>Content</th><th>Type</th><th>Last updated</th><th>Freshness</th><th></th>' +
+			'</tr></thead><tbody>' + rows + '</tbody></table>' +
+			'<div class="seob-pager"><div class="seob-pager__info">' + num( d.total ) + ' item(s) · page ' + freshState.page + ' of ' + totalPages + '</div>' +
+			'<div class="seob-pager__btns">' +
+			'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-fresh-prev"' + ( freshState.page <= 1 ? ' disabled' : '' ) + '>Prev</button>' +
+			'<button class="seob-btn seob-btn--ghost seob-btn--sm" id="seob-fresh-next"' + ( freshState.page >= totalPages ? ' disabled' : '' ) + '>Next</button>' +
+			'</div></div>';
+
+		var prev = document.getElementById( 'seob-fresh-prev' );
+		var next = document.getElementById( 'seob-fresh-next' );
+		if ( prev ) {
+			prev.addEventListener( 'click', function () {
+				if ( freshState.page > 1 ) {
+					freshState.page--;
+					loadFreshness();
+				}
+			} );
+		}
+		if ( next ) {
+			next.addEventListener( 'click', function () {
+				if ( freshState.page < totalPages ) {
+					freshState.page++;
+					loadFreshness();
+				}
+			} );
+		}
+	}
+
 	/* ===== Settings ===== */
 	Views[ '/settings' ] = function () {
 		loading();
@@ -721,6 +1055,16 @@
 			card.appendChild( numberField( 'blc_timeout', 'Request timeout (seconds)', 'How long to wait for each link to respond.', st.blc_timeout ) );
 			view.appendChild( card );
 
+			/* Content freshness thresholds */
+			var freshCard = h( '<div class="seob-card seob-mt"></div>' );
+			freshCard.innerHTML = '<div class="seob-card__head"><div><h2>Content freshness</h2><p>When to flag content as aging or stale.</p></div></div>';
+			freshCard.appendChild( pillsField( 'freshness_post_types', 'Content to audit', cfg.postTypes, st.freshness_post_types ) );
+			var fr1 = fieldRow();
+			fr1.appendChild( wrapFlex( numberField( 'freshness_aging_months', 'Aging after (months)', 'Flag as "aging" past this age.', st.freshness_aging_months ) ) );
+			fr1.appendChild( wrapFlex( numberField( 'freshness_stale_months', 'Stale after (months)', 'Flag as "stale" past this age.', st.freshness_stale_months ) ) );
+			freshCard.appendChild( fr1 );
+			view.appendChild( freshCard );
+
 			var info = h( '<div class="seob-card seob-mt"></div>' );
 			info.innerHTML =
 				'<div class="seob-card__head"><div><h2>About SEO Boost</h2></div></div>' +
@@ -739,6 +1083,9 @@
 					blc_frequency: document.querySelector( '[name="blc_frequency"]' ).value,
 					blc_post_types: getPills( 'blc_post_types' ),
 					blc_timeout: parseInt( document.querySelector( '[name="blc_timeout"]' ).value, 10 ) || 10,
+					freshness_post_types: getPills( 'freshness_post_types' ),
+					freshness_aging_months: parseInt( document.querySelector( '[name="freshness_aging_months"]' ).value, 10 ) || 3,
+					freshness_stale_months: parseInt( document.querySelector( '[name="freshness_stale_months"]' ).value, 10 ) || 6,
 				};
 			} );
 		} ).catch( function () {
@@ -763,6 +1110,30 @@
 			'<label class="seob-label">' + esc( label ) + '</label><p class="seob-hint">' + hint + '</p>' +
 			'<input class="seob-input" type="number" name="' + name + '" value="' + esc( value ) + '" style="max-width:200px">';
 		return f;
+	}
+
+	function textField( name, label, hint, value, placeholder, width ) {
+		var f = h( '<div class="seob-field"></div>' );
+		f.innerHTML =
+			'<label class="seob-label">' + esc( label ) + '</label>' +
+			( hint ? '<p class="seob-hint">' + hint + '</p>' : '' ) +
+			'<input class="seob-input" type="text" name="' + name + '" value="' + esc( value == null ? '' : value ) + '"' +
+			' placeholder="' + esc( placeholder || '' ) + '" style="max-width:' + ( width || '460px' ) + '">';
+		return f;
+	}
+
+	function textareaField( name, label, hint, value, placeholder ) {
+		var f = h( '<div class="seob-field"></div>' );
+		f.innerHTML =
+			'<label class="seob-label">' + esc( label ) + '</label>' +
+			( hint ? '<p class="seob-hint">' + hint + '</p>' : '' ) +
+			'<textarea class="seob-input" name="' + name + '" placeholder="' + esc( placeholder || '' ) + '">' +
+			esc( value == null ? '' : value ) + '</textarea>';
+		return f;
+	}
+
+	function fieldRow() {
+		return h( '<div class="seob-row"></div>' );
 	}
 
 	function selectField( name, label, value, options ) {

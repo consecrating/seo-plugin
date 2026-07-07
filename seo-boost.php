@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       SEO Boost - Sitemap, IndexNow & Broken Links
  * Plugin URI:        https://example.com/seo-boost
- * Description:        All-in-one SEO toolkit: automatic XML sitemaps, instant IndexNow submission to search engines, a broken link checker, and Google Search Console connection - wrapped in a modern dashboard.
- * Version:           1.1.0
+ * Description:        All-in-one SEO toolkit: XML sitemaps, instant IndexNow submission, broken link checker, Google Search Console, Local SEO / Schema structured data, and a content freshness audit - wrapped in a modern dashboard.
+ * Version:           1.2.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            Your Agency
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Core plugin constants.
  */
-define( 'SEO_BOOST_VERSION', '1.1.0' );
+define( 'SEO_BOOST_VERSION', '1.2.0' );
 define( 'SEO_BOOST_FILE', __FILE__ );
 define( 'SEO_BOOST_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SEO_BOOST_URL', plugin_dir_url( __FILE__ ) );
